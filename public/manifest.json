@@ -1,0 +1,16 @@
+{
+  "name": "CTL-SLITTER AI Optimizer",
+  "short_name": "CTL Optimizer",
+  "description": "AI-powered optimization system for Cut-To-Length operations",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
