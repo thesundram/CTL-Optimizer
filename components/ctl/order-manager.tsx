@@ -8,10 +8,10 @@ import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
 import { useCTL, type Order } from "./ctl-context"
 import { Badge } from "@/components/ui/badge"
-import { Trash2, Upload } from "lucide-react"
+import { Trash2, Upload, Pencil, X, Check } from "lucide-react"
 
 export default function OrderManager() {
-  const { orders, addOrder, bulkImportOrders, deleteOrder } = useCTL()
+  const { orders, addOrder, updateOrder, bulkImportOrders, deleteOrder } = useCTL()
   const [formData, setFormData] = useState<Omit<Order, "id">>({
     orderId: "",
     product: "" as any,
@@ -27,6 +27,8 @@ export default function OrderManager() {
     status: "pending",
   })
   const [uploadError, setUploadError] = useState<string>("")
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editFormData, setEditFormData] = useState<Partial<Order>>({})
 
   const calculateWeight = (width: number, length: number, thickness: number, quantity: number) => {
     const STEEL_DENSITY = 7.85
@@ -145,10 +147,34 @@ export default function OrderManager() {
     }
   }
 
+  const handleEditClick = (order: Order) => {
+    setEditingId(order.id)
+    setEditFormData({ ...order })
+  }
+
+  const handleEditCancel = () => {
+    setEditingId(null)
+    setEditFormData({})
+  }
+
+  const handleEditSave = () => {
+    if (editingId && editFormData) {
+      updateOrder(editingId, editFormData)
+      setEditingId(null)
+      setEditFormData({})
+    }
+  }
+
   const statusColor = {
     pending: "bg-gray-100 text-gray-800",
-    assigned: "bg-blue-100 text-blue-800",
+    assigned: "bg-yellow-100 text-yellow-800",
     completed: "bg-green-100 text-green-800",
+  }
+
+  const statusLabel = {
+    pending: "Pending",
+    assigned: "In Process",
+    completed: "Complete",
   }
 
   return (
@@ -238,7 +264,7 @@ export default function OrderManager() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-2">Quantity (sheets)</label>
+            <label className="block text-sm font-medium mb-2">Quantity(No of Sheets)</label>
             <Input
               type="number"
               placeholder="50"
@@ -301,7 +327,7 @@ export default function OrderManager() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-2">Weight (MT) - Auto Calculated</label>
+            <label className="block text-sm font-medium mb-2">Order Weight(MT)</label>
             <Input
               type="number"
               step="0.01"
@@ -342,7 +368,13 @@ export default function OrderManager() {
 
       <div className="grid gap-4">
         <h3 className="text-lg font-semibold">
-          Orders ({orders.filter((o) => o.status === "pending").length} pending)
+          Orders ({orders.length}) |
+          <span className="text-green-600 ml-2">{orders.filter((o) => o.status === "completed").length} Complete</span>{" "}
+          |
+          <span className="text-yellow-600 ml-2">
+            {orders.filter((o) => o.status === "assigned").length} In Process
+          </span>{" "}
+          |<span className="text-gray-600 ml-2">{orders.filter((o) => o.status === "pending").length} Pending</span>
         </h3>
         {orders.length === 0 ? (
           <Card className="p-6 text-center text-muted-foreground">
@@ -352,36 +384,230 @@ export default function OrderManager() {
           <div className="grid gap-3">
             {orders.map((order) => (
               <Card key={order.id} className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
+                {editingId === order.id ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-semibold">Edit Order: {order.orderId}</h4>
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="ghost" onClick={handleEditCancel}>
+                          <X className="h-4 w-4" />
+                        </Button>
+                        <Button size="sm" onClick={handleEditSave} className="bg-green-600 hover:bg-green-700">
+                          <Check className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <div>
+                        <label className="block text-xs font-medium mb-1">Order ID</label>
+                        <Input
+                          value={editFormData.orderId || ""}
+                          onChange={(e) => setEditFormData({ ...editFormData, orderId: e.target.value })}
+                          className="h-9 text-sm border-2 border-blue-400"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium mb-1">Product</label>
+                        <select
+                          value={editFormData.product || ""}
+                          onChange={(e) =>
+                            setEditFormData({
+                              ...editFormData,
+                              product: e.target.value as "HR" | "CR" | "GP" | "CC" | "SS",
+                            })
+                          }
+                          className="h-9 text-sm w-full px-2 border-2 border-blue-400 rounded-md bg-white"
+                        >
+                          <option value="">Select</option>
+                          <option value="HR">HR</option>
+                          <option value="CR">CR</option>
+                          <option value="GP">GP</option>
+                          <option value="CC">CC</option>
+                          <option value="SS">SS</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium mb-1">Thickness (mm)</label>
+                        <Input
+                          type="number"
+                          step="0.1"
+                          value={editFormData.thickness || ""}
+                          onChange={(e) => {
+                            const thickness = e.target.value ? Number.parseFloat(e.target.value) : 0
+                            setEditFormData({
+                              ...editFormData,
+                              thickness,
+                              weight: calculateWeight(
+                                editFormData.width || 0,
+                                editFormData.length || 0,
+                                thickness,
+                                editFormData.quantity || 0,
+                              ),
+                            })
+                          }}
+                          className="h-9 text-sm border-2 border-blue-400"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium mb-1">Width (mm)</label>
+                        <Input
+                          type="number"
+                          value={editFormData.width || ""}
+                          onChange={(e) => {
+                            const width = e.target.value ? Number.parseInt(e.target.value) : 0
+                            setEditFormData({
+                              ...editFormData,
+                              width,
+                              weight: calculateWeight(
+                                width,
+                                editFormData.length || 0,
+                                editFormData.thickness || 0,
+                                editFormData.quantity || 0,
+                              ),
+                            })
+                          }}
+                          className="h-9 text-sm border-2 border-blue-400"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium mb-1">Length (mm)</label>
+                        <Input
+                          type="number"
+                          value={editFormData.length || ""}
+                          onChange={(e) => {
+                            const length = e.target.value ? Number.parseInt(e.target.value) : 0
+                            setEditFormData({
+                              ...editFormData,
+                              length,
+                              weight: calculateWeight(
+                                editFormData.width || 0,
+                                length,
+                                editFormData.thickness || 0,
+                                editFormData.quantity || 0,
+                              ),
+                            })
+                          }}
+                          className="h-9 text-sm border-2 border-blue-400"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium mb-1">Quantity</label>
+                        <Input
+                          type="number"
+                          value={editFormData.quantity || ""}
+                          onChange={(e) => {
+                            const quantity = e.target.value ? Number.parseInt(e.target.value) : 0
+                            setEditFormData({
+                              ...editFormData,
+                              quantity,
+                              weight: calculateWeight(
+                                editFormData.width || 0,
+                                editFormData.length || 0,
+                                editFormData.thickness || 0,
+                                quantity,
+                              ),
+                            })
+                          }}
+                          className="h-9 text-sm border-2 border-blue-400"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium mb-1">Grade</label>
+                        <Input
+                          value={editFormData.grade || ""}
+                          onChange={(e) => setEditFormData({ ...editFormData, grade: e.target.value })}
+                          className="h-9 text-sm border-2 border-blue-400"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium mb-1">Coil/Packet Wt. (MT)</label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={editFormData.coilPacketWeight || ""}
+                          onChange={(e) =>
+                            setEditFormData({
+                              ...editFormData,
+                              coilPacketWeight: e.target.value ? Number.parseFloat(e.target.value) : 0,
+                            })
+                          }
+                          className="h-9 text-sm border-2 border-blue-400"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium mb-1">Due Date</label>
+                        <Input
+                          type="date"
+                          value={editFormData.dueDate || ""}
+                          onChange={(e) => setEditFormData({ ...editFormData, dueDate: e.target.value })}
+                          className="h-9 text-sm border-2 border-blue-400"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium mb-1">Priority</label>
+                        <Input
+                          type="number"
+                          value={editFormData.priority || ""}
+                          onChange={(e) =>
+                            setEditFormData({
+                              ...editFormData,
+                              priority: e.target.value ? Number.parseInt(e.target.value) : 0,
+                            })
+                          }
+                          className="h-9 text-sm border-2 border-blue-400"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium mb-1">Weight (MT)</label>
+                        <Input
+                          type="number"
+                          value={editFormData.weight || ""}
+                          disabled
+                          className="h-9 text-sm bg-blue-50 border-2 border-blue-300"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-semibold">{order.orderId}</h4>
+                        <Badge className="bg-blue-600 text-white">{order.product}</Badge>
+                      </div>
+                      <div className="mt-1 flex gap-4 text-sm text-muted-foreground">
+                        <span>{order.thickness}mm T</span>
+                        <span>{order.width}mm W</span>
+                        <span>{order.length}mm L</span>
+                        <span>{order.quantity} sheets</span>
+                        <span>Grade: {order.grade}</span>
+                        <span>Coil Wt: {order.coilPacketWeight} MT</span>
+                        <span>Due: {order.dueDate}</span>
+                        <span>P{order.priority}</span>
+                        <span>{order.weight} MT</span>
+                      </div>
+                    </div>
                     <div className="flex items-center gap-2">
-                      <h4 className="font-semibold">{order.orderId}</h4>
-                      <Badge className="bg-blue-600 text-white">{order.product}</Badge>
-                    </div>
-                    <div className="mt-1 flex gap-4 text-sm text-muted-foreground">
-                      <span>{order.thickness}mm T</span>
-                      <span>{order.width}mm W</span>
-                      <span>{order.length}mm L</span>
-                      <span>{order.quantity} sheets</span>
-                      <span>Grade: {order.grade}</span>
-                      <span>Coil Wt: {order.coilPacketWeight} MT</span>
-                      <span>Due: {order.dueDate}</span>
-                      <span>P{order.priority}</span>
-                      <span>{order.weight} MT</span>
+                      <Badge className={statusColor[order.status]}>{statusLabel[order.status]}</Badge>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleEditClick(order)}
+                        className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => deleteOrder(order.id)}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Badge className={statusColor[order.status]}>{order.status}</Badge>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => deleteOrder(order.id)}
-                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
+                )}
               </Card>
             ))}
           </div>
