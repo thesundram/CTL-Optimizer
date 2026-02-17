@@ -15,7 +15,7 @@ export default function Home() {
       <main className="min-h-screen bg-background">
         <header className="border-b border-border bg-gradient-to-r from-primary to-accent">
           <div className="mx-auto max-w-7xl px-4 py-8">
-            <h1 className="text-3xl font-bold text-primary-foreground">CTL-SLITTER (AI Optimizer)</h1>
+            <h1 className="text-3xl font-bold text-primary-foreground">CTL Optimizer (AI Base)</h1>
             <p className="mt-2 text-sm text-primary-foreground/90">by Uttam Innovative Solution Pvt.Ltd.</p>
           </div>
         </header>
