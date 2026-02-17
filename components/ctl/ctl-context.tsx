@@ -54,6 +54,13 @@ export interface Assignment {
   status: "proposed" | "confirmed" | "completed"
   coilConsumption: number // percentage of coil weight consumed
   coilBalance: number // percentage of coil weight remaining
+  isPartialAllocation?: boolean // true if this is part of a multi-coil fulfillment
+  allocatedWeight?: number // weight allocated from this coil
+  orderAllocations?: Array<{
+    orderId: string
+    allocatedWeight: number
+    isPartial: boolean
+  }>
 }
 
 export interface RMForecast {
@@ -81,8 +88,11 @@ interface CTLContextType {
   actualAssignments: Assignment[]
   rmForecasts: RMForecast[]
   addLine: (line: CTLLine) => void
+  updateLine: (lineId: string, line: Partial<CTLLine>) => void
+  deleteLine: (lineId: string) => void
   addCoil: (coil: Coil) => void
   addOrder: (order: Order) => void
+  updateOrder: (orderId: string, order: Partial<Order>) => void
   bulkImportCoils: (coils: Omit<Coil, "id">[]) => void
   bulkImportOrders: (orders: Omit<Order, "id">[]) => void
   updateCoilStatus: (coilId: string, status: Coil["status"]) => void
@@ -149,12 +159,24 @@ export function CTLProvider({ children }: { children: ReactNode }) {
     setLines([...lines, { ...line, id: Date.now().toString() }])
   }
 
+  const updateLine = (lineId: string, updatedData: Partial<CTLLine>) => {
+    setLines(lines.map((l) => (l.id === lineId ? { ...l, ...updatedData } : l)))
+  }
+
+  const deleteLine = (lineId: string) => {
+    setLines(lines.filter((l) => l.id !== lineId))
+  }
+
   const addCoil = (coil: Coil) => {
     setCoils([...coils, { ...coil, id: Date.now().toString() }])
   }
 
   const addOrder = (order: Order) => {
     setOrders([...orders, { ...order, id: Date.now().toString() }])
+  }
+
+  const updateOrder = (orderId: string, updatedData: Partial<Order>) => {
+    setOrders(orders.map((o) => (o.id === orderId ? { ...o, ...updatedData } : o)))
   }
 
   const bulkImportCoils = (newCoils: Omit<Coil, "id">[]) => {
@@ -198,6 +220,46 @@ export function CTLProvider({ children }: { children: ReactNode }) {
         status: allocatedCoilIds.has(c.id) ? "used" : c.status,
       })),
     )
+
+    // Get all allocated order IDs and their allocation details
+    const orderAllocationMap = new Map<string, { totalAllocated: number; isPartial: boolean }>()
+
+    confirmedAssignments.forEach((assignment) => {
+      if (assignment.orderAllocations) {
+        assignment.orderAllocations.forEach((alloc) => {
+          // alloc.orderId is the internal order.id, not the user-entered orderId
+          const existing = orderAllocationMap.get(alloc.orderId) || { totalAllocated: 0, isPartial: false }
+          orderAllocationMap.set(alloc.orderId, {
+            totalAllocated: existing.totalAllocated + alloc.allocatedWeight,
+            isPartial: existing.isPartial || alloc.isPartial,
+          })
+        })
+      } else {
+        // Fallback for assignments without orderAllocations - use orderIds array which contains internal IDs
+        assignment.orderIds.forEach((orderId) => {
+          const order = orders.find((o) => o.id === orderId)
+          if (order) {
+            orderAllocationMap.set(orderId, { totalAllocated: order.weight, isPartial: false })
+          }
+        })
+      }
+    })
+
+    // Update order statuses using order.id (internal ID) for lookup
+    setOrders(
+      orders.map((order) => {
+        const allocation = orderAllocationMap.get(order.id) // Use order.id instead of order.orderId
+        if (!allocation) {
+          return { ...order, status: "pending" as const }
+        }
+        // Check if fully allocated (allocation weight >= order weight) or mark as assigned
+        const isFullyAllocated = allocation.totalAllocated >= order.weight * 0.99 // 99% tolerance
+        return {
+          ...order,
+          status: isFullyAllocated ? ("completed" as const) : ("assigned" as const),
+        }
+      }),
+    )
   }
 
   const clearAssignments = () => {
@@ -225,8 +287,11 @@ export function CTLProvider({ children }: { children: ReactNode }) {
         actualAssignments,
         rmForecasts,
         addLine,
+        updateLine,
+        deleteLine,
         addCoil,
         addOrder,
+        updateOrder,
         bulkImportCoils,
         bulkImportOrders,
         deleteCoil,
